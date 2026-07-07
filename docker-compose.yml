@@ -1,0 +1,82 @@
+services:
+  app:
+    build:
+      context: ./services/app
+      args:
+        UID: ${UID:-1000}
+        GID: ${GID:-1000}
+    container_name: climbing_judge_app
+    restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:80"
+    volumes:
+      - ./services/app:/var/www/html
+    depends_on:
+      db:
+        condition: service_healthy
+      ai-service:
+        condition: service_started
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      APP_DEBUG: ${APP_DEBUG:-true}
+      APP_KEY: ${APP_KEY}
+      APP_URL: ${APP_URL:-http://localhost:8080}
+      DB_CONNECTION: mysql
+      DB_HOST: db
+      DB_PORT: 3306
+      DB_DATABASE: ${DB_DATABASE:-climbing_judge}
+      DB_USERNAME: ${DB_USERNAME:-climbing}
+      DB_PASSWORD: ${DB_PASSWORD:-secret}
+      SESSION_DRIVER: database
+      CACHE_STORE: file
+      FILESYSTEM_DISK: public
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:8080/auth/google/callback}
+      AI_SERVICE_URL: http://ai-service:8000/analyze
+    networks:
+      - climbing-network
+
+  db:
+    image: mariadb:11.4
+    container_name: climbing_judge_db
+    restart: unless-stopped
+    ports:
+      - "${DB_FORWARD_PORT:-3307}:3306"
+    environment:
+      MARIADB_DATABASE: ${DB_DATABASE:-climbing_judge}
+      MARIADB_USER: ${DB_USERNAME:-climbing}
+      MARIADB_PASSWORD: ${DB_PASSWORD:-secret}
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootsecret}
+    volumes:
+      - dbdata:/var/lib/mysql
+      - ./services/db/initdb:/docker-entrypoint-initdb.d:ro
+      - ./services/db/conf.d:/etc/mysql/conf.d:ro
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks:
+      - climbing-network
+
+  ai-service:
+    build:
+      context: ./services/ai-service
+    container_name: climbing_judge_ai_service
+    restart: unless-stopped
+    ports:
+      - "${AI_SERVICE_PORT:-8000}:8000"
+    environment:
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-gpt-4.1-mini}
+      AI_PROVIDER: ${AI_PROVIDER:-openai}
+      MOCK_MODE: ${MOCK_MODE:-auto}
+    networks:
+      - climbing-network
+
+volumes:
+  dbdata:
+
+networks:
+  climbing-network:

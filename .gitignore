@@ -1,0 +1,13 @@
+/.env
+/node_modules
+/services/app/vendor
+/services/app/node_modules
+/services/app/public/storage
+/services/app/storage/*.key
+/services/app/storage/app/public/score-sheets/*
+/services/app/storage/framework/cache/*
+/services/app/storage/framework/sessions/*
+/services/app/storage/framework/views/*
+/services/app/storage/logs/*
+/services/app/.phpunit.cache
+/services/ai-service/__pycache__/
