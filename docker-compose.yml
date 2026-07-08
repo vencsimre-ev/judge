@@ -11,6 +11,7 @@ services:
       - "${APP_PORT:-8080}:80"
     volumes:
       - ./services/app:/var/www/html
+      - ./.env:/var/www/html/.env
     depends_on:
       db:
         condition: service_healthy

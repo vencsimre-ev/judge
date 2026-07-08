@@ -25,7 +25,13 @@ COPY .docker/php-apache/vhost.conf /etc/apache2/sites-available/000-default.conf
 COPY --chown=www-data:www-data . .
 COPY --chown=www-data:www-data --from=php_builder /app/vendor /var/www/html/vendor
 
-RUN chmod +x docker-entrypoint.dev.sh artisan \
+RUN mkdir -p storage/app/public/score-sheets \
+        storage/framework/cache \
+        storage/framework/sessions \
+        storage/framework/views \
+        storage/logs \
+        bootstrap/cache \
+    && chmod +x docker-entrypoint.dev.sh artisan \
     && chown -R www-data:www-data storage bootstrap/cache
 
 ENTRYPOINT ["./docker-entrypoint.dev.sh"]

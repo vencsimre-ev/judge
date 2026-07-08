@@ -68,6 +68,8 @@ http://ai-service:8000/analyze
 cp .env.example .env
 ```
 
+Ez a root `.env` fajl ket helyen is hasznalva van: a Docker Compose ebbol olvassa a portokat es jelszavakat, a Laravel kontener pedig ugyanezt kapja meg `/var/www/html/.env` fajlkent.
+
 2. Inditsd el a kontenereket:
 
 ```bash
@@ -78,6 +80,12 @@ docker compose up --build
 
 ```bash
 docker compose exec app php artisan key:generate
+```
+
+Mivel a kontener indulasakor az `APP_KEY` meg ures volt, a kulcs generalasa utan inditsd ujra az appot, hogy a friss ertek bekeruljon a kontener kornyezetebe:
+
+```bash
+docker compose up -d --force-recreate app
 ```
 
 4. Futtasd ujra a migraciot, ha szukseges:
