@@ -1,8 +1,10 @@
 /.env
+/services/app/.env
 /node_modules
 /services/app/vendor
 /services/app/node_modules
 /services/app/public/storage
+/services/app/bootstrap/cache/*.php
 /services/app/storage/*.key
 /services/app/storage/app/public/score-sheets/*
 /services/app/storage/framework/cache/*

@@ -20,7 +20,6 @@ services:
     environment:
       APP_ENV: ${APP_ENV:-local}
       APP_DEBUG: ${APP_DEBUG:-true}
-      APP_KEY: ${APP_KEY}
       APP_URL: ${APP_URL:-http://localhost:8080}
       DB_CONNECTION: mysql
       DB_HOST: db
@@ -31,9 +30,6 @@ services:
       SESSION_DRIVER: database
       CACHE_STORE: file
       FILESYSTEM_DISK: public
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
-      GOOGLE_REDIRECT_URI: ${GOOGLE_REDIRECT_URI:-http://localhost:8080/auth/google/callback}
       AI_SERVICE_URL: http://ai-service:8000/analyze
     networks:
       - climbing-network

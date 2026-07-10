@@ -8,7 +8,7 @@ echo "Prepare Laravel writable directories"
 mkdir -p storage/app/public/score-sheets storage/framework/cache storage/framework/sessions storage/framework/views storage/logs bootstrap/cache
 chown -R www-data:www-data storage bootstrap/cache
 
-if [ -z "$APP_KEY" ]; then
+if ! grep -Eq '^APP_KEY=.+$' .env 2>/dev/null; then
   echo "APP_KEY is empty. Generate one with: docker compose exec app php artisan key:generate"
 fi
 

@@ -68,7 +68,7 @@ http://ai-service:8000/analyze
 cp .env.example .env
 ```
 
-Ez a root `.env` fajl ket helyen is hasznalva van: a Docker Compose ebbol olvassa a portokat es jelszavakat, a Laravel kontener pedig ugyanezt kapja meg `/var/www/html/.env` fajlkent.
+Ez a root `.env` fajl ket helyen is hasznalva van: a Docker Compose ebbol olvassa a portokat es jelszavakat, a Laravel kontener pedig ugyanezt kapja meg `/var/www/html/.env` fajlkent. A `services/app/.env` fajlra nincs szukseg; ne oda masold az ertekeket.
 
 2. Inditsd el a kontenereket:
 
@@ -80,12 +80,6 @@ docker compose up --build
 
 ```bash
 docker compose exec app php artisan key:generate
-```
-
-Mivel a kontener indulasakor az `APP_KEY` meg ures volt, a kulcs generalasa utan inditsd ujra az appot, hogy a friss ertek bekeruljon a kontener kornyezetebe:
-
-```bash
-docker compose up -d --force-recreate app
 ```
 
 4. Futtasd ujra a migraciot, ha szukseges:
@@ -161,6 +155,21 @@ GOOGLE_CLIENT_ID=...
 GOOGLE_CLIENT_SECRET=...
 GOOGLE_REDIRECT_URI=http://localhost:8080/auth/google/callback
 ```
+
+Ha a kontener mar futott, amikor ezeket kitoltotted, inditsd ujra, majd torold a Laravel konfiguracios cache-et:
+
+```bash
+docker compose up -d --force-recreate app
+docker compose exec app php artisan optimize:clear
+```
+
+Ellenorzes ertekek kiirasa nelkul:
+
+```bash
+curl -s -D - -o /dev/null http://localhost:8080/auth/google | grep -q 'client_id=' && echo "Google client_id betoltve"
+```
+
+Friss klonozas utan a `storage` es `bootstrap/cache` konyvtarakat a Dockerfile mar build kozben, az entrypoint pedig minden kontenerindulaskor letrehozza. Kezzel nem kell `mkdir` parancsokat futtatni.
 
 ## AI API kulcs es mock mod
 
