@@ -21,6 +21,7 @@ A felhasznalo Google OAuth segitsegevel bejelentkezik, feltolt egy versenybiroi 
 - `app`: Laravel + Apache
 - `db`: MariaDB
 - `ai-service`: FastAPI microservice
+- `ollama`: helyi AI modellfuttato service, ha az Ollama provider van kivalasztva
 
 ## Mappastruktura
 
@@ -130,10 +131,13 @@ GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 GOOGLE_REDIRECT_URI=http://localhost:8080/auth/google/callback
 
-AI_PROVIDER=openai
+AI_PROVIDER=mock
 AI_API_KEY=
-AI_MODEL=gpt-4.1-mini
-MOCK_MODE=auto
+OPENAI_MODEL=gpt-4.1-mini
+OLLAMA_URL=http://ollama:11434
+OLLAMA_MODEL=qwen3-vl:4b
+OLLAMA_TIMEOUT=300
+AI_SERVICE_TIMEOUT=330
 ```
 
 ## Google OAuth beallitasa
@@ -171,27 +175,80 @@ curl -s -D - -o /dev/null http://localhost:8080/auth/google | grep -q 'client_id
 
 Friss klonozas utan a `storage` es `bootstrap/cache` konyvtarakat a Dockerfile mar build kozben, az entrypoint pedig minden kontenerindulaskor letrehozza. Kezzel nem kell `mkdir` parancsokat futtatni.
 
-## AI API kulcs es mock mod
+## AI provider kivalasztasa
 
-Alapertelmezetten a demo mock modban is mukodik. Ha az `AI_API_KEY` ures es a `MOCK_MODE=auto`, akkor a FastAPI service minta JSON-t ad vissza, igy a Laravel felulet azonnal tesztelheto.
+Az `AI_PROVIDER` erteke pontosan egy modot valaszt ki. Nincs automatikus fallback: hianyos vagy hibas konfiguracio eseten a FastAPI es a Laravel feltoltooldala is egyertelmu hibát jelez.
 
-Mock mod kenyszeritese:
+### Mock
 
 ```env
-MOCK_MODE=true
-AI_API_KEY=
+AI_PROVIDER=mock
 ```
 
-Valodi AI hivas:
+Nem kell API-kulcs vagy Ollama-kapcsolat. A szolgaltatas a rogzitett minta JSON-t adja vissza, ezert mock modban nincs valodi kepelemzes.
+
+### OpenAI
 
 ```env
-MOCK_MODE=false
 AI_PROVIDER=openai
 AI_API_KEY=sk-...
-AI_MODEL=gpt-4.1-mini
+OPENAI_MODEL=gpt-4.1-mini
 ```
 
-Az AI service a feltoltott kepet ellenorzi, JPEG-re tomoriti es maximum 1600x1600 meretre meretezi, mielott az AI providernek tovabbitja.
+Az OpenAI API hasznalata hasznalatalapu koltseggel jar. Az `OPENAI_MODEL` az elsodleges modellvaltozo; az atallas megkonnyitesere a korabbi `AI_MODEL` is tamogatott, ha az `OPENAI_MODEL` ures vagy nincs beallitva.
+
+### Ollama
+
+```env
+AI_PROVIDER=ollama
+OLLAMA_URL=http://ollama:11434
+OLLAMA_MODEL=qwen3-vl:4b
+OLLAMA_TIMEOUT=300
+```
+
+Az `OLLAMA_URL` konteneren belul az `ollama` service nevere mutat, nem `localhost`-ra. A hoston a service alapertelmezetten a `http://localhost:11434` cimen erheto el hibakereseshez.
+
+Inditas es a vision modell egyszeri, kezi letoltese:
+
+```bash
+docker compose up -d ollama
+docker compose exec ollama ollama pull qwen3-vl:4b
+docker compose up -d --build
+```
+
+A modell elso letoltese internetkapcsolatot igenyel. Utana helyben fut, nincs kepenkenti API-dij, viszont a sajat gep CPU/GPU- es memoria-eroforrasait hasznalja. A modell az `ollama_data` Docker volume-ban megmarad, es kontenerinditaskor nem toltodik le automatikusan.
+
+Az AI service a feltoltott kepet minden valodi providernel ellenorzi, JPEG-re tomoriti es maximum 1600x1600 meretre meretezi. Az Ollama alapertelmezett idokorlatja 300 masodperc, amely az `OLLAMA_TIMEOUT` valtozoval modosithato.
+
+A Laravel `AI_SERVICE_TIMEOUT` erteke legyen nagyobb az `OLLAMA_TIMEOUT` ertekenel, hogy a Laravel ne szakitsa meg hamarabb a kerest. Pelda lassabb, CPU-n futo modellhez:
+
+```env
+OLLAMA_TIMEOUT=600
+AI_SERVICE_TIMEOUT=660
+```
+
+Ezek Compose-kornyezeti valtozok, ezert modositasuk utan az erintett kontenereket ujra kell letrehozni:
+
+```bash
+docker compose up -d --no-deps --force-recreate ai-service app
+```
+
+Providerallapot ellenorzese (nem ad vissza titkot):
+
+```bash
+curl http://localhost:8000/status
+```
+
+Az AI service a gyoker `.env` fajlt csak olvashato modban csatolja be, es minden statusz- vagy elemzesi keresnel ujraolvassa. Emiatt az `AI_PROVIDER`, `AI_API_KEY`, `OPENAI_MODEL`, `OLLAMA_URL`, `OLLAMA_MODEL` es `OLLAMA_TIMEOUT` modositasahoz nem kell kontenert ujrainditani. Mentes utan a kovetkezo keres mar az uj beallitast hasznalja. A Laravelhez tartozo `AI_SERVICE_TIMEOUT` modositasakor viszont az `app` kontenert ujra kell letrehozni.
+
+A `/health` csak a FastAPI kontener mukodeset jelzi; a `/status` ellenorzi a kivalasztott provider konfiguraciojat. Ollama modban az elerhetoseget es a modell helyi jelenletet is vizsgalja.
+
+Alaptesztek futtatasa:
+
+```bash
+docker compose build ai-service
+docker compose run --rm ai-service python -m unittest discover -s tests -v
+```
 
 ## Route-ok
 

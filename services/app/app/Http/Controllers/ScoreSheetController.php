@@ -27,7 +27,21 @@ class ScoreSheetController extends Controller
 
     public function create()
     {
-        return view('score_sheets.create');
+        try {
+            $response = Http::timeout(5)->get(config('services.ai.status_url'));
+            $response->throw();
+            $aiStatus = $response->json();
+        } catch (Throwable) {
+            $aiStatus = [
+                'status' => 'unavailable',
+                'provider' => null,
+                'model' => null,
+                'configured' => false,
+                'message' => 'Az AI service nem érhető el. A képelemzés jelenleg nem használható.',
+            ];
+        }
+
+        return view('score_sheets.create', compact('aiStatus'));
     }
 
     public function store(Request $request): RedirectResponse
@@ -40,7 +54,7 @@ class ScoreSheetController extends Controller
         $imagePath = $image->store('score-sheets', 'public');
 
         try {
-            $response = Http::timeout(120)
+            $response = Http::timeout(config('services.ai.timeout'))
                 ->attach('image', file_get_contents($image->getRealPath()), $image->getClientOriginalName())
                 ->post(config('services.ai.url'));
 

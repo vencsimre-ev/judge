@@ -31,6 +31,8 @@ services:
       CACHE_STORE: file
       FILESYSTEM_DISK: public
       AI_SERVICE_URL: http://ai-service:8000/analyze
+      AI_STATUS_URL: http://ai-service:8000/status
+      AI_SERVICE_TIMEOUT: ${AI_SERVICE_TIMEOUT:-330}
     networks:
       - climbing-network
 
@@ -64,16 +66,34 @@ services:
     restart: unless-stopped
     ports:
       - "${AI_SERVICE_PORT:-8000}:8000"
+    volumes:
+      - ./.env:/app/project.env:ro
     environment:
+      DYNAMIC_ENV_FILE: /app/project.env
       AI_API_KEY: ${AI_API_KEY:-}
-      AI_MODEL: ${AI_MODEL:-gpt-4.1-mini}
-      AI_PROVIDER: ${AI_PROVIDER:-openai}
-      MOCK_MODE: ${MOCK_MODE:-auto}
+      AI_PROVIDER: ${AI_PROVIDER:-mock}
+      OPENAI_MODEL: ${OPENAI_MODEL:-}
+      AI_MODEL: ${AI_MODEL:-}
+      OLLAMA_URL: ${OLLAMA_URL:-http://ollama:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen3-vl:4b}
+      OLLAMA_TIMEOUT: ${OLLAMA_TIMEOUT:-300}
+    networks:
+      - climbing-network
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: climbing_judge_ollama
+    restart: unless-stopped
+    volumes:
+      - ollama_data:/root/.ollama
+    ports:
+      - "${OLLAMA_PORT:-11434}:11434"
     networks:
       - climbing-network
 
 volumes:
   dbdata:
+  ollama_data:
 
 networks:
   climbing-network:

@@ -4,9 +4,11 @@ import json
 import os
 from typing import Any
 
+import httpx
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from openai import OpenAI
 from PIL import Image
+from dotenv import load_dotenv
 
 app = FastAPI(title="Climbing Judge AI Service")
 
@@ -128,13 +130,36 @@ def mock_response() -> dict[str, Any]:
     }
 
 
-def should_mock() -> bool:
-    mode = os.getenv("MOCK_MODE", "auto").lower()
-    if mode in {"1", "true", "yes", "on"}:
-        return True
-    if mode in {"0", "false", "no", "off"}:
-        return False
-    return not bool(os.getenv("AI_API_KEY"))
+def get_provider() -> str:
+    dynamic_env_file = os.getenv("DYNAMIC_ENV_FILE")
+    if dynamic_env_file:
+        load_dotenv(dynamic_env_file, override=True)
+    return os.getenv("AI_PROVIDER", "mock").strip().lower()
+
+
+def get_openai_model() -> str:
+    return os.getenv("OPENAI_MODEL") or os.getenv("AI_MODEL") or "gpt-4.1-mini"
+
+
+def get_ollama_model() -> str:
+    return os.getenv("OLLAMA_MODEL", "qwen3-vl:4b")
+
+
+def get_ollama_url() -> str:
+    return os.getenv("OLLAMA_URL", "http://ollama:11434").rstrip("/")
+
+
+def get_ollama_timeout() -> float:
+    try:
+        timeout = float(os.getenv("OLLAMA_TIMEOUT", "300"))
+        if timeout <= 0:
+            raise ValueError
+        return timeout
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Az OLLAMA_TIMEOUT értékének pozitív számnak kell lennie.",
+        ) from exc
 
 
 def compress_image(image_bytes: bytes) -> bytes:
@@ -152,8 +177,15 @@ def compress_image(image_bytes: bytes) -> bytes:
 
 
 def analyze_with_openai(image_bytes: bytes) -> dict[str, Any]:
-    client = OpenAI(api_key=os.getenv("AI_API_KEY"))
-    model = os.getenv("AI_MODEL", "gpt-4.1-mini")
+    api_key = os.getenv("AI_API_KEY")
+    if not api_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Az OpenAI provider aktív, de nincs megadva AI_API_KEY.",
+        )
+
+    client = OpenAI(api_key=api_key)
+    model = get_openai_model()
     encoded = base64.b64encode(image_bytes).decode("utf-8")
 
     response = client.chat.completions.create(
@@ -183,9 +215,135 @@ def analyze_with_openai(image_bytes: bytes) -> dict[str, Any]:
         raise HTTPException(status_code=502, detail="Az AI provider valasza nem valid JSON.") from exc
 
 
+async def analyze_with_ollama(image_bytes: bytes) -> dict[str, Any]:
+    encoded = base64.b64encode(image_bytes).decode("utf-8")
+    payload = {
+        "model": get_ollama_model(),
+        "messages": [
+            {
+                "role": "user",
+                "content": PROMPT,
+                "images": [encoded],
+            }
+        ],
+        "stream": False,
+        "format": "json",
+        "options": {"temperature": 0},
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=get_ollama_timeout()) as client:
+            response = await client.post(f"{get_ollama_url()}/api/chat", json=payload)
+    except httpx.TimeoutException as exc:
+        raise HTTPException(status_code=504, detail="Az Ollama hívás túllépte az időkorlátot.") from exc
+    except httpx.RequestError as exc:
+        raise HTTPException(status_code=503, detail="Az Ollama service nem érhető el.") from exc
+
+    if response.status_code == 404:
+        raise HTTPException(
+            status_code=503,
+            detail="A konfigurált Ollama modell nincs letöltve.",
+        )
+    if response.is_error:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Az Ollama service hibával tért vissza (HTTP {response.status_code}).",
+        )
+
+    try:
+        content = response.json().get("message", {}).get("content")
+    except (ValueError, AttributeError) as exc:
+        raise HTTPException(status_code=502, detail="Az Ollama hibás választ adott.") from exc
+
+    if not content:
+        raise HTTPException(status_code=502, detail="Az Ollama üres választ adott.")
+
+    try:
+        return json.loads(content)
+    except (json.JSONDecodeError, TypeError) as exc:
+        raise HTTPException(status_code=502, detail="Az Ollama válasza nem valid JSON.") from exc
+
+
+async def ollama_status() -> dict[str, Any]:
+    model = get_ollama_model()
+    base = {
+        "provider": "ollama",
+        "model": model,
+        "configured": False,
+        "service_reachable": False,
+        "model_available": False,
+    }
+
+    try:
+        timeout = min(get_ollama_timeout(), 10.0)
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.get(f"{get_ollama_url()}/api/tags")
+            response.raise_for_status()
+            models = response.json().get("models", [])
+    except HTTPException as exc:
+        return {**base, "status": "configuration_error", "message": exc.detail}
+    except httpx.TimeoutException:
+        return {**base, "status": "unavailable", "message": "Az Ollama állapotlekérése túllépte az időkorlátot."}
+    except (httpx.HTTPError, ValueError, AttributeError):
+        return {**base, "status": "unavailable", "message": "Az Ollama service nem érhető el."}
+
+    available = any(item.get("name") == model or item.get("model") == model for item in models)
+    if not available:
+        return {
+            **base,
+            "status": "configuration_error",
+            "service_reachable": True,
+            "message": "Az Ollama elérhető, de a konfigurált modell nincs letöltve.",
+        }
+
+    return {
+        **base,
+        "status": "ok",
+        "configured": True,
+        "service_reachable": True,
+        "model_available": True,
+        "message": "A helyi Ollama mód aktív.",
+    }
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.get("/status")
+async def provider_status() -> dict[str, Any]:
+    provider = get_provider()
+    if provider == "mock":
+        return {
+            "status": "ok",
+            "provider": "mock",
+            "model": None,
+            "configured": True,
+            "message": "Mock mód aktív.",
+        }
+    if provider == "openai":
+        configured = bool(os.getenv("AI_API_KEY"))
+        return {
+            "status": "ok" if configured else "configuration_error",
+            "provider": "openai",
+            "model": get_openai_model(),
+            "configured": configured,
+            "message": (
+                "OpenAI mód aktív."
+                if configured
+                else "Az OpenAI provider aktív, de nincs megadva AI_API_KEY."
+            ),
+        }
+    if provider == "ollama":
+        return await ollama_status()
+    return {
+        "status": "configuration_error",
+        "provider": provider,
+        "model": None,
+        "configured": False,
+        "message": f"Nem támogatott AI provider: {provider}",
+    }
 
 
 @app.post("/analyze")
@@ -196,11 +354,11 @@ async def analyze(image: UploadFile = File(...)) -> dict[str, Any]:
     image_bytes = await image.read()
     compressed = compress_image(image_bytes)
 
-    if should_mock():
+    provider = get_provider()
+    if provider == "mock":
         return mock_response()
-
-    provider = os.getenv("AI_PROVIDER", "openai").lower()
-    if provider != "openai":
-        raise HTTPException(status_code=400, detail=f"Nem tamogatott AI provider: {provider}")
-
-    return analyze_with_openai(compressed)
+    if provider == "openai":
+        return analyze_with_openai(compressed)
+    if provider == "ollama":
+        return await analyze_with_ollama(compressed)
+    raise HTTPException(status_code=400, detail=f"Nem támogatott AI provider: {provider}")
