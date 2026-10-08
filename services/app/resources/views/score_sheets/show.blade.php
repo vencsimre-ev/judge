@@ -14,23 +14,15 @@
 </div>
 
 <div class="row g-4 mb-4">
-    <div class="col-lg-5">
+    <div class="col-lg-6">
         <div class="card shadow-sm">
             <div class="card-header bg-white">Feltoltott kep</div>
             <img class="img-fluid sheet-image w-100" src="{{ asset('storage/'.$scoreSheet->image_path) }}" alt="Feltoltott versenylap">
         </div>
     </div>
-    <div class="col-lg-7">
-        <div class="card shadow-sm h-100">
-            <div class="card-header bg-white">Nyers AI JSON</div>
-            <div class="card-body">
-                <pre class="small mb-0">{{ json_encode($scoreSheet->raw_ai_json, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
-            </div>
-        </div>
-    </div>
 </div>
 
-<div class="card shadow-sm">
+<div class="card shadow-sm mb-4">
     <div class="card-header bg-white">Feldolgozott sorok</div>
     <div class="table-responsive">
         <table class="table table-sm table-striped align-middle mb-0">
@@ -69,6 +61,21 @@
             @endforeach
             </tbody>
         </table>
+    </div>
+</div>
+
+<div class="accordion" id="rawJsonAccordion">
+    <div class="accordion-item shadow-sm">
+        <h2 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#rawJson" aria-expanded="false" aria-controls="rawJson">
+                Strukturalt JSON
+            </button>
+        </h2>
+        <div id="rawJson" class="accordion-collapse collapse" data-bs-parent="#rawJsonAccordion">
+            <div class="accordion-body">
+                <pre class="small mb-0">{{ json_encode($scoreSheet->raw_ai_json, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) }}</pre>
+            </div>
+        </div>
     </div>
 </div>
 @endsection

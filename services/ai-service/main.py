@@ -17,24 +17,29 @@ PROMPT = """Elemezd a feltoltott versenybiroi lap kepet.
 A kep egy sportmaszo / boulder versenybiroi lapot tartalmaz.
 Olvasd ki a tablazat sorait es add vissza strukturalt JSON formaban.
 
-A probak oszlopban hasznalt jelolesek:
+A probak oszlopban csak haromfele eredmeny lehet:
 - I = sikertelen proba
-- z betu vagy + jel = zona elerese
-- T vagy F vagy ehhez hasonlo olyan F ami egy kozepen athuzott nagy T betu = top elerese
+- Z, z vagy + = zona elerese
+- T, F vagy egy kozepen athuzott T-re/F-re hasonlito jel = top elerese
 
 Fontos szabalyok:
+- A jeleket balrol jobbra, probankent kell szamolni. Minden kulonallo I, Z/+, T/F egy probapozicio.
 - A Zone mezo azt jelenti, hogy hanyadik probara erte el eloszor a zonat.
 - A Top mezo azt jelenti, hogy hanyadik probara erte el eloszor a topot.
 - Nem az osszes zona vagy top darabszamat kell szamolni.
 - Csak az elso sikeres zona es az elso sikeres top szamit.
-- A probak teljes szama csak ellenorzesre szolgal.
-- Ha valaki topot er el, es nincs kulon korabbi zona jeloles, akkor a zona probaja ugyanaz, mint a top probaja, tehat Z1 T1
-- Pelda: "+T" jelentese: Zone = 1, Top = 2.
-- Pelda: "T" jelentese: Zone = 1, Top = 1.
-- Pelda: "II+I" jelentese: Zone = 3, Top = null.
-- Pelda: "III" jelentese: Zone = null, Top = null.
+- Ha valaki topot er el, es nincs korabbi zona jeloles, akkor az elso zona probaja ugyanaz, mint a top probaja.
+- A kesobbi zona- vagy topjelek nem irjak felul az elso elerest.
+- A szokozok csak elvalasztok, nem jelentenek uj probat.
+- Pelda: "+IT" = Zone 1, Top 3, attempts_count 3.
+- Pelda: "I I I" = Zone null, Top null, attempts_count 3 (megjelenitesben Z0 T0).
+- Pelda: "I I I I +" = Zone 5, Top null, attempts_count 5.
+- Pelda: "I I + I I + T" = Zone 3, Top 7, attempts_count 7.
+- Pelda: "I I Z + + + + F" = Zone 3, Top 8, attempts_count 8.
+- Pelda: "I F" ket kulon jel: az elso proba sikertelen, a masodik top, ezert Zone 2, Top 2.
+- Egyetlen kezzel irt, athuzott topjel OCR-rel "1F" vagy "IF" alakunak tunhet. Ha ez vizualisan egyetlen osszetett jel, ne bontsd sikertelen I-re es F-re. Ilyenkor a jobb oldali Zone/Top ertekek alapjan allapitsd meg, hogy peldaul Zone 1, Top 1.
 
-A jobb oldali Top es Zone oszlopokban szereplo szamok is probaszamok.
+A jobb oldali Top es Zone oszlopokban szereplo szamok probaszamok, es fontos ellenorzesi referenciak a kezzel irt jelek feloldasahoz.
 Ha a probak oszlopa es a jobb oldali Top/Zone oszlop ellentmond egymasnak, akkor:
 - add vissza mindkettot,
 - jelezd a warnings mezoben az elterest,

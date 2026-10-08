@@ -55,8 +55,8 @@
                         <td><input class="form-control form-control-sm" name="rows[{{ $row->id }}][name]" value="{{ old("rows.{$row->id}.name", $row->name) }}"></td>
                         <td><input class="form-control form-control-sm" name="rows[{{ $row->id }}][country]" value="{{ old("rows.{$row->id}.country", $row->country) }}"></td>
                         <td><input class="form-control form-control-sm" name="rows[{{ $row->id }}][attempts_raw]" value="{{ old("rows.{$row->id}.attempts_raw", $row->attempts_raw) }}"></td>
-                        <td><input class="form-control form-control-sm" type="number" min="1" name="rows[{{ $row->id }}][zone_attempt]" value="{{ old("rows.{$row->id}.zone_attempt", $row->zone_attempt) }}"></td>
-                        <td><input class="form-control form-control-sm" type="number" min="1" name="rows[{{ $row->id }}][top_attempt]" value="{{ old("rows.{$row->id}.top_attempt", $row->top_attempt) }}"></td>
+                        <td><input class="form-control form-control-sm" type="number" min="0" name="rows[{{ $row->id }}][zone_attempt]" value="{{ old("rows.{$row->id}.zone_attempt", $row->zone_attempt) }}"></td>
+                        <td><input class="form-control form-control-sm" type="number" min="0" name="rows[{{ $row->id }}][top_attempt]" value="{{ old("rows.{$row->id}.top_attempt", $row->top_attempt) }}"></td>
                         <td><input class="form-control form-control-sm" type="number" step="0.01" min="0" max="1" name="rows[{{ $row->id }}][confidence]" value="{{ old("rows.{$row->id}.confidence", $row->confidence) }}"></td>
                         <td>
                             @foreach(($row->warnings ?? []) as $warning)

@@ -132,8 +132,8 @@ class ScoreSheetController extends Controller
             'rows.*.name' => ['nullable', 'string', 'max:255'],
             'rows.*.country' => ['nullable', 'string', 'max:255'],
             'rows.*.attempts_raw' => ['nullable', 'string', 'max:255'],
-            'rows.*.zone_attempt' => ['nullable', 'integer', 'min:1'],
-            'rows.*.top_attempt' => ['nullable', 'integer', 'min:1'],
+            'rows.*.zone_attempt' => ['nullable', 'integer', 'min:0'],
+            'rows.*.top_attempt' => ['nullable', 'integer', 'min:0'],
             'rows.*.confidence' => ['nullable', 'numeric', 'min:0', 'max:1'],
         ]);
 
@@ -151,17 +151,22 @@ class ScoreSheetController extends Controller
             }
 
             $attemptsRaw = $rowData['attempts_raw'] ?? null;
+            $attemptsWithoutSpaces = $attemptsRaw
+                ? preg_replace('/\s+/u', '', $attemptsRaw)
+                : null;
             $row->update([
                 'bib' => $rowData['bib'] ?? null,
                 'name' => $rowData['name'] ?? null,
                 'country' => $rowData['country'] ?? null,
                 'attempts_raw' => $attemptsRaw,
-                'attempts_count' => $attemptsRaw ? mb_strlen($attemptsRaw) : null,
+                'attempts_count' => $attemptsWithoutSpaces ? mb_strlen($attemptsWithoutSpaces) : null,
                 'zone_attempt' => $rowData['zone_attempt'] ?? null,
                 'top_attempt' => $rowData['top_attempt'] ?? null,
                 'confidence' => $rowData['confidence'] ?? null,
             ]);
         }
+
+        $this->syncRawAiJson($scoreSheet);
 
         return redirect()->route('score-sheets.show', $scoreSheet)
             ->with('success', 'A javitasok mentve lettek.');
@@ -219,5 +224,35 @@ class ScoreSheetController extends Controller
     private function authorizeOwner(ScoreSheet $scoreSheet): void
     {
         abort_unless($scoreSheet->user_id === Auth::id(), 403);
+    }
+
+    private function syncRawAiJson(ScoreSheet $scoreSheet): void
+    {
+        $scoreSheet->refresh()->load('rows');
+        $rawAiJson = $scoreSheet->raw_ai_json ?? [];
+
+        $rawAiJson['sheet'] = [
+            'category' => $scoreSheet->category,
+            'route' => $scoreSheet->route,
+            'judge_name' => $scoreSheet->judge_name,
+            'confidence' => data_get($rawAiJson, 'sheet.confidence'),
+        ];
+        $rawAiJson['rows'] = $scoreSheet->rows->map(fn ($row) => [
+            'row_number' => $row->row_number,
+            'start_time' => $row->start_time,
+            'bib' => $row->bib,
+            'name' => $row->name,
+            'country' => $row->country,
+            'attempts_raw' => $row->attempts_raw,
+            'attempts_count' => $row->attempts_count,
+            'zone_attempt' => $row->zone_attempt,
+            'top_attempt' => $row->top_attempt,
+            'zone_column_value' => $row->zone_column_value,
+            'top_column_value' => $row->top_column_value,
+            'confidence' => $row->confidence !== null ? (float) $row->confidence : null,
+            'warnings' => $row->warnings ?? [],
+        ])->values()->all();
+
+        $scoreSheet->update(['raw_ai_json' => $rawAiJson]);
     }
 }
